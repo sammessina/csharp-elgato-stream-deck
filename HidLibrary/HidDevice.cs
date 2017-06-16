@@ -531,11 +531,21 @@ namespace HidLibrary
         private bool WriteData(byte[] data, int timeout)
         {
             if (_deviceCapabilities.OutputReportByteLength <= 0) return false;
-
-            var buffer = CreateOutputBuffer();
             uint bytesWritten = 0;
 
-            Array.Copy(data, 0, buffer, 0, Math.Min(data.Length, _deviceCapabilities.OutputReportByteLength));
+            // Optimization: Don't create a new buffer & copy if given data array is of sufficient size.
+            byte[] buffer;
+            if (data.Length == _deviceCapabilities.OutputReportByteLength) {
+                buffer = data;
+            }
+            else
+            {
+                buffer = CreateOutputBuffer();
+                Array.Copy(data, 0, buffer, 0, Math.Min(data.Length, _deviceCapabilities.OutputReportByteLength));
+            }
+
+            // TODO: Do that thing that tells the CLR not to move the 'byte[] data' object around in memory.
+            // As there may be a race condition if the location moves during the Write() Win32 call.
 
             if (_deviceWriteMode == DeviceMode.Overlapped)
             {
@@ -563,6 +573,7 @@ namespace HidLibrary
                 switch (result)
                 {
                     case NativeMethods.WAIT_OBJECT_0:
+                        NativeMethods.CloseHandle(overlapped.EventHandle);
                         return true;
                     case NativeMethods.WAIT_TIMEOUT:
                         return false;
