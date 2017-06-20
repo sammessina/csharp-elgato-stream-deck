@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Diagnostics;
+using System.Drawing;
 using System.Linq;
 using System.Threading;
 using StreamDeckLibrary;
@@ -17,39 +19,37 @@ namespace StreamApp {
             var deck = devices.First();
 
             deck.Connect();
-            
-            deck.SetBrightness(100);
+            deck.SetBrightness(50);
 
-            Random rand = new Random();
+            var renderer = new SampleRenderer();
+            Stopwatch sw = new Stopwatch();
+            sw.Start();
+            double lastTime = sw.Elapsed.TotalMilliseconds;
+            Bitmap screen = new Bitmap(StreamDeck.FullScreenWidth, StreamDeck.FullScreenHeight);
+            var graphics = Graphics.FromImage(screen);
+            double targetFps = 60;
+            double targetInterval = 1000 / targetFps;
+            renderer.Init(screen.Width, screen.Height);
+
+            deck.OnButtonDown += index => renderer.OnKeyDown(index);
+            deck.OnButtonUp += index => renderer.OnKeyUp(index);
 
             while (true) {
-                int r = rand.Next(0, 2)*255;
-                int g = rand.Next(0, 2) * 255;
-                int b = r = g = rand.Next(0, 2) * 255;
+                double now = sw.Elapsed.TotalMilliseconds;
+                double dtMs = now - lastTime;
+                double dt = dtMs / 1000;
+                lastTime = now;
 
-                for (int row = 0; row < 1; row++) {
-                    for (int i = 4; i >= 4; i--) {
-                        deck.WriteImage(row*5+i, r, g, b);
-                        
-                    }
-                    //Thread.Sleep(50);
+                renderer.Update(dt, screen, graphics);
+                renderer.Render(dt, screen, graphics);
+
+                deck.WriteScreenImage(screen);
+
+                double delay = targetInterval - dtMs;
+                if (delay > 0) {
+                    Thread.Sleep((int) delay);
                 }
             }
-
-
-            /*
-                        deck.SetBrightness(0);
-                        Thread.Sleep(1000);
-                        deck.SetBrightness(90);
-                        Thread.Sleep(1000);
-
-                        for (int i = 50; i < 100; i++) {
-                            deck.SetBrightness(i);
-                            Thread.Sleep(100);
-                        }*/
-
-            //_device.WriteFeatureData(SetBrightnessMessage.data);
-            //_device.WriteReport(new SetBrightnessMessage());
 
 
             Console.WriteLine("StreamDeck found, press any key to exit.");

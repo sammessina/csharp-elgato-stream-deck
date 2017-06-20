@@ -25,6 +25,8 @@ namespace StreamDeckLibrary {
         public const int VisibleScreenWidth = 360;
         public const int VisibleScreenHeight = 216;
 
+        public const int BezelWidth = 27;
+
         public const int IconSize = 72;
 
         private const int VendorId = 0x0fd9;
@@ -121,14 +123,13 @@ namespace StreamDeckLibrary {
         /// <param name="image">The image to draw. Must be 360x216 or 468x270 (with bezel compensation).</param>
         public void WriteScreenImage(Bitmap image) {
             // Note: By my measurement, each screen is 14x14mm. The width of all screens on the first row is 91mm.
-            const int bezelWidthPx = 27;
             
             if ((image.Width != VisibleScreenWidth || image.Height != VisibleScreenHeight) && (image.Width != FullScreenWidth || image.Height != FullScreenHeight)) {
                 throw new ArgumentException(string.Format("Unsupported image resolution given: {0}x{1}", image.Width, image.Height), nameof(image));
             }
             
             // Use the same algorithm, but just adjust the amount of data that is skipped in between sections
-            int skipPx = (image.Width == VisibleScreenWidth) ? 0 : bezelWidthPx;
+            int skipPx = (image.Width == VisibleScreenWidth) ? 0 : BezelWidth;
             int stridePx = skipPx + IconSize;
 
             for (int y = 0; y < 3; y++) {

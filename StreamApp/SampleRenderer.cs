@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Drawing;
 using System.Drawing.Text;
+using StreamDeckLibrary;
 
 namespace StreamApp {
     public class SampleRenderer : IApp {
@@ -8,15 +9,20 @@ namespace StreamApp {
         private Paddle p1, p2;
         private Ball ball = new Ball();
 
-        Font font = new Font(new FontFamily("Segoe UI"), 32, FontStyle.Regular, GraphicsUnit.Pixel);
-        SolidBrush solidBrush = new SolidBrush(Color.FromArgb(200, 255, 255, 255));
+        Font font = new Font(new FontFamily("Consolas"), 26, FontStyle.Regular, GraphicsUnit.Pixel);
+        SolidBrush fontColor = new SolidBrush(Color.FromArgb(100, 255, 255, 255));
 
         private bool[] keyStates = new bool[15];
-        
-        public void Update(double dt, Bitmap screen, Graphics graphics) {
 
-            p1.Update(dt, screen, keyStates[4], keyStates[14]);
-            p2.Update(dt, screen, keyStates[0], keyStates[10]);
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="dt"></param>
+        /// <param name="screen"></param>
+        /// <param name="graphics"></param>
+        public void Update(double dt, Bitmap screen, Graphics graphics) {
+            p1.Update(dt, screen, ball.dx == -1 && ball.X + ball.Size / 2 < screen.Width * 2 / 3, ball, keyStates[4], keyStates[14]);
+            p2.Update(dt, screen, ball.dx == 1 && ball.X + ball.Size / 2 > screen.Width * 1 / 3, ball, keyStates[4], keyStates[10]);
             ball.Update(dt, screen);
             ball.UpdateCollision(p1, p2, screen);
         }
@@ -24,11 +30,11 @@ namespace StreamApp {
         public void Render(double dt, Bitmap screen, Graphics graphics) {
             // Clear the screen
             graphics.FillRectangle(blackBrush, 0, 0, screen.Width, screen.Height);
-            
+
 
             graphics.TextRenderingHint = TextRenderingHint.AntiAlias;
-            graphics.DrawString(p1.Score.ToString(), font, solidBrush, 110, 10);
-            graphics.DrawString(p2.Score.ToString(), font, solidBrush, 320, 10);
+            graphics.DrawString(p1.Score.ToString(), font, fontColor, (StreamDeck.IconSize + StreamDeck.BezelWidth) + 10, 10);
+            graphics.DrawString(p2.Score.ToString(), font, fontColor, (StreamDeck.IconSize + StreamDeck.BezelWidth) * 3 + 10, 10);
 
             ball.Render(graphics);
             p1.Render(graphics);
@@ -50,11 +56,11 @@ namespace StreamApp {
 
 
         private class Paddle {
-            private const double Speed = 300;
-            
-            public const int Width = 15;
+            private double Speed = 300;
+
+            public const int Width = 10;
             Pen pen = new Pen(Color.White, Width);
-            public const int Height = 100;
+            public const int Height = 75;
             public double X { get; private set; }
             public double Y { get; private set; }
             public int Score { get; set; }
@@ -64,7 +70,15 @@ namespace StreamApp {
                 this.Y = y;
             }
 
-            public void Update(double dt, Bitmap screen, bool up, bool down) {
+            public void Update(double dt, Bitmap screen, bool autoMove, Ball ball, bool up, bool down) {
+                if (autoMove) {
+                    // Automate input
+                    up = ball.Y + ball.Size / 2 < Y + Height / 2;
+                    down = ball.Y + ball.Size / 2 > Y + Height / 2;
+                    Speed = 1000;
+                }
+
+
                 if (up == down) {
                     return;
                 }
@@ -86,63 +100,73 @@ namespace StreamApp {
 
         private class Ball {
             // Coordinate is the top-left of the ball
-            private double x = 100;
-            private double y = 100;
-            private int diameter = 20;
+            public double X { get; private set; } = 100;
+            public double Y { get; private set; } = 100;
+            public int Size { get; private set; } = 20;
             private Random rand = new Random();
 
-            private int dx = 1, dy = 1;
+            public double dx = 1, dy = 1;
             private double speedInPxPerSec = 200;
+            private const double acceleration = 50; // How fast the velocity increases, in px/sec^2
             Pen whitePen = new Pen(Color.DeepPink, 5);
             Pen whitePen2 = new Pen(Color.Aqua, 5);
 
             public void Update(double dt, Bitmap screen) {
-                x += dx * speedInPxPerSec * dt;
-                y += dy * speedInPxPerSec * dt;
+                X += dx * speedInPxPerSec * dt;
+                Y += dy * speedInPxPerSec * dt;
 
-                if ((dx == 1 && x > screen.Width) || (dx == -1 && x < 0)) {
+                speedInPxPerSec += acceleration * dt;
+
+                if ((dx > 0 && X + Size > screen.Width) || (dx < 0 && X < 0)) {
                     dx *= -1;
                 }
-                if ((dy == 1 && y > screen.Height) || (dy == -1 && y < 0)) {
+                if ((dy > 0 && Y + Size > screen.Height) || (dy < 0 && Y < 0)) {
                     dy *= -1;
                 }
             }
 
             public void Render(Graphics graphics) {
-                graphics.DrawRectangle(whitePen, (int)(x), (int)(y), diameter, diameter);
-                graphics.DrawRectangle(whitePen2, (int)(x + 5), (int)(y + 5), diameter/2, diameter/2);
+                graphics.DrawRectangle(whitePen, (int)(X), (int)(Y), Size, Size);
+                graphics.DrawRectangle(whitePen2, (int)(X + 5), (int)(Y + 5), Size / 2, Size / 2);
             }
 
             public void UpdateCollision(Paddle p1, Paddle p2, Bitmap screen) {
                 // Test collision with paddle 1
-                if (x < p1.X + Paddle.Width && y + diameter > p1.Y && y < p1.Y + Paddle.Height) {
-                    x = p1.X + Paddle.Width;
-                    dx *= -1;
+                if (X < p1.X + Paddle.Width && Y + Size > p1.Y && Y < p1.Y + Paddle.Height) {
+                    X = p1.X + Paddle.Width;
+                    dx = Math.Abs(dx);
                     return;
                 }
 
                 // Test collision with paddle 2
-                if (x + diameter > p2.X && y + diameter > p2.Y && y < p2.Y + Paddle.Height) {
-                    x = p2.X - diameter;
-                    dx *= -1;
+                if (X + Size > p2.X && Y + Size > p2.Y && Y < p2.Y + Paddle.Height) {
+                    X = p2.X - Size;
+                    dx = -Math.Abs(dx);
                     return;
                 }
 
                 // Test collision with outer walls
-                if (x < 0) {
+                if (X < 0) {
                     p2.Score++;
                 }
 
-                if (x > p2.X + Paddle.Width) {
+                if (X > p2.X + Paddle.Width) {
                     p1.Score++;
                 }
 
-                if (x < 0 || x > p2.X + Paddle.Width) {
-                    x = screen.Width / 2 - diameter / 2;
-                    y = screen.Height / 2 - diameter / 2;
-                    dx = rand.Next(2) * 2 - 1;
-                    dy = rand.Next(2) * 2 - 1;
+                if (X < 0 || X > p2.X + Paddle.Width) {
+                    Reset(screen);
                 }
+            }
+
+            private void Reset(Bitmap screen) {
+                X = screen.Width / 2 - Size / 2;
+                Y = screen.Height / 2 - Size / 2;
+                dx = rand.Next(2) * 2 - 1;
+                dy = (rand.NextDouble() + .5) * (rand.Next(2) * 2 - 1);
+                //dy = rand.Next(2) * 2 - 1;
+
+                speedInPxPerSec = 200;
             }
         }
     }
